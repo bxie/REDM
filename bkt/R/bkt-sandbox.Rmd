@@ -1,0 +1,110 @@
+---
+title: "BKT sandbox"
+output: html_notebook
+---
+
+```{r}
+source("bkt.R")
+source("bkt-sim.r")
+source("bkt-bforce.R")
+source("bkt-hmm.R")
+source("logprob_ops.R")
+```
+
+
+```{r}
+# set item params (init, learn, guess, slip)
+p1 <- as.bkt.params( c(0.1, 0.15, 0.2, 0.25))
+p2 <- as.bkt.params( c(0.1, 0.15, 0.2, 0.25))
+p3 <- as.bkt.params( c(0.1, 0.15, 0.2, 0.25))
+
+
+# simulate 20 learning steps for 10 students
+sim <- bkt.sim(100, 20, p1) # NA at j and beyond if participant only did j-1 opportunities
+```
+
+All the bkt functions
+```{r}
+# probability of correct responses predicted by BKT
+pcorrect(sim$opps, p)
+
+# prob of student knowledge
+pknown(sim$opps, p)
+```
+
+Recover parameters w/ brute force and HMM (I would have to do this w/ EP)
+```{r}
+bforce.search(sim$opps)
+
+hmm <- bkt.hmm.fit(as.bkt.params(runif(4)), sim$opps)
+hmm
+```
+
+
+```{r}
+# Get probability of 
+avg <- function(pknown, j)
+{
+  return(mean(pknown[,j]))
+}
+```
+
+Implementing updates accroding to Hawkins, Heffernan, & Baker 2014
+- shouldn't be probabilities. should be observed!
+```{r}
+INIT <- "init"
+LEARN <- "learn"
+GUESS <- "guess"
+SLIP <- "slip"
+
+update.init <- function(params, opps, step = ncol(opps)) {
+  p.know <- pknown(opps, params)
+  
+  return( sum(p.know[,1]) / nrow(p.know) ) # \sum K_0 / | K_0 |
+}
+
+update.transfer <- function(params, opps, step = ncol(opps)) {
+  if(step<2){return(params[LEARN])}
+  p.know <- pknown(opps, params)
+  
+  numerator <- rowSums(sapply((2:step), function(x){(1-p.know[,x-1]) * p.know[,x]}), na.rm = TRUE) # \sum_{i \neq 0} (1 - K_{i-1}) * K_i
+  denominator <- rowSums(sapply((2:step), function(x){(1-p.know[,x-1])}), na.rm = TRUE) # \sum_{i \neq 0} (1 - K_{i-1})
+  
+  return(mean(numerator / denominator)) # average across responses of all students
+}
+
+update.guess <- function(params, opps, step = ncol(opps)) {
+  p.know <- pknown(opps, params)
+  p.correct <- pcorrect(opps, params)
+  numerator <- rowSums(sapply((1:step), function(i){p.correct[,i] * (1 - p.know[,i])}), na.rm = TRUE) # \sum_{i} C_i * (1 - K_i)
+  denominator <- rowSums(sapply((1:step), function(i){(1 - p.know[,i])}), na.rm = TRUE) # \sum_{i} (1 - K_{i})
+  
+  return(mean(numerator / denominator)) # average across responses of all students
+}
+
+# TODO: off by order of magnitude. (try step = 1). I may not be summing things correctly
+update.slip <- function(params, resp.data, step = ncol(opps)) {
+  know <- resp.data$opps
+  correct <- resp.data$correct
+  
+  numerator <- rowSums(sapply((1:step), function(i){ !correct[,i] * know[,i]}), na.rm = TRUE) # \sum_{i} (1 - C_i) * K_i
+  denominator <- rowSums(sapply((1:step), function(i){p.know[,i]}), na.rm = TRUE) # \sum_{i} (K_{i})
+  
+  return(mean(numerator / denominator)) # average across responses of all students
+  
+}
+```
+
+
+
+Implementing selection algo
+```{r}
+min.score = 0
+max.score = 1
+step = 4
+epsilon <- 0
+penalty <- 1.0
+
+wanted.score = min.score + (max.score - min.score) * (1 - colMeans(pknown(sim$opps, p1))[step]) + epsilon 
+diff <- abs(colMeans(pcorrect(sim$opps, p1))[step] - wanted.score) * penalty
+```
