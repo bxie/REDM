@@ -1,6 +1,8 @@
 ---
 title: "BKT sandbox"
 output: html_notebook
+
+Sandbox for code from [REDM package](https://github.com/IEDMS/REDM)
 ---
 
 ```{r}
@@ -14,19 +16,19 @@ source("logprob_ops.R")
 
 ```{r}
 # set item params (init, learn, guess, slip)
-p1 <- as.bkt.params( c(0.1, 0.15, 0.2, 0.25))
-p2 <- as.bkt.params( c(0.1, 0.15, 0.2, 0.25))
-p3 <- as.bkt.params( c(0.1, 0.15, 0.2, 0.25))
+p1 <- as.bkt.params(c(0.1, 0.15, 0.2, 0.25))
+p2 <- as.bkt.params(c(0.1, 0.15, 0.2, 0.25))
+p3 <- as.bkt.params(c(0.1, 0.15, 0.2, 0.25))
 
 
 # simulate 20 learning steps for 10 students
-sim <- bkt.sim(100, 20, p1) # NA at j and beyond if participant only did j-1 opportunities
+sim <- bkt.sim(10, 5, p1) # NA at j and beyond if participant only did j-1 opportunities
 ```
 
 All the bkt functions
 ```{r}
 # probability of correct responses predicted by BKT
-pcorrect(sim$opps, p)
+mean(pcorrect(sim$opps, p)[,10], na.rm = TRUE)
 
 # prob of student knowledge
 pknown(sim$opps, p)
@@ -40,17 +42,15 @@ hmm <- bkt.hmm.fit(as.bkt.params(runif(4)), sim$opps)
 hmm
 ```
 
-
+Sequencing algorithm
 ```{r}
-# Get probability of 
-avg <- function(pknown, j)
-{
-  return(mean(pknown[,j]))
-}
+get.correctness <- function()
 ```
+
 
 Implementing updates accroding to Hawkins, Heffernan, & Baker 2014
 - shouldn't be probabilities. should be observed!
+- this doesn't work and i don't need it to because i'm abandoning this (for now?)
 ```{r}
 INIT <- "init"
 LEARN <- "learn"
